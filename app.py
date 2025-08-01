@@ -13,7 +13,7 @@ def is_1_away_from_13(val):
         return False
 
 @st.cache_data(ttl=3600)
-    def get_active_players():
+def get_active_players():
     url = "https://statsapi.mlb.com/api/v1/people?active=true&sportId=1"
     response = requests.get(url)
     if response.status_code != 200:
