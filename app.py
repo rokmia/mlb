@@ -1,156 +1,139 @@
-import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime, timedelta
-from time import sleep
+import time
+from openpyxl import load_workbook
+from openpyxl.styles import PatternFill, Font
 
-st.title("MLB Milestone Tracker (13-Based)")
-
-def is_1_away_from_13(val):
-    try:
-        return (int(val) + 1) % 13 == 0
-    except:
-        return False
-
-def get_tomorrows_games():
-    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
-    url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={tomorrow}"
-    response = requests.get(url)
-    response.raise_for_status()
-    data = response.json()
-    games = data.get("dates", [])[0].get("games", []) if data.get("dates") else []
-    st.info(f"Found {len(games)} scheduled games for tomorrow.")
-    return games
+def get_all_team_ids():
+    url = "https://statsapi.mlb.com/api/v1/teams?sportId=1"
+    teams = requests.get(url).json()["teams"]
+    return [(team["id"], team["name"]) for team in teams]
 
 def get_team_roster(team_id):
-    url = f"https://statsapi.mlb.com/api/v1/teams/{team_id}/roster/active"
-    response = requests.get(url)
-    response.raise_for_status()
-    return response.json().get("roster", [])
+    url = f"https://statsapi.mlb.com/api/v1/teams/{team_id}/roster"
+    roster = requests.get(url).json()
+    return [player["person"]["id"] for player in roster["roster"]]
 
-def get_player_stats(player_id):
-    url = f"https://statsapi.mlb.com/api/v1/people/{player_id}/stats?stats=career&stats=season&group=all"
-    response = requests.get(url)
-    response.raise_for_status()
-    return response.json().get("stats", [])
+def get_player_info_and_stats(player_id, team_name):
+    url = f"https://statsapi.mlb.com/api/v1/people/{player_id}?hydrate=stats(group=[hitting],type=[season,career])"
+    response = requests.get(url).json()
+    person = response["people"][0]
 
-def extract_stats(stats):
-    stat_dict = {}
-    for item in stats:
-        splits = item.get("splits", [])
-        for split in splits:
-            type_label = split.get("type", {}).get("displayName", "").lower()
-            stat = split.get("stat", {})
-            if type_label in ["season", "career"]:
-                stat_dict[type_label] = stat
-    return stat_dict
+    name = person["fullName"]
+    jersey = person.get("primaryNumber", "N/A")
+    birthdate = person.get("birthDate", "N/A")
 
-def check_milestone(stats):
-    milestone_stats = {}
-    for scope in ["season", "career"]:
-        scope_stats = stats.get(scope, {})
+    stats = {
+        "Season HR": None,
+        "Career HR": None,
+        "Season Games": None,
+        "Career Games": None,
+        "Season Hits": None,
+        "Career Hits": None,
+        "Season Runs": None,
+        "Career Runs": None,
+        "Season RBI": None,
+        "Career RBI": None,
+        "Season TB": None,
+        "Career TB": None,
+    }
 
-        if scope == "season":
-            keys = ["gamesPlayed", "hits", "doubles", "triples", "homeRuns", "stolenBases", "totalBases"]
-        elif scope == "career":
-            keys = ["gamesPlayed", "hits", "doubles", "triples", "homeRuns", "stolenBases", "totalBases"]
+    for stat_block in person.get("stats", []):
+        stat_type = stat_block["type"]["displayName"]
+        splits = stat_block.get("splits", [])
+        if not splits:
+            continue
 
-        for key in keys:
-            val = scope_stats.get(key)
-            if is_1_away_from_13(val):
-                milestone_stats.setdefault(scope, {})[key] = val
+        stat_data = splits[0]["stat"]
+        prefix = "Season" if stat_type == "season" else "Career"
+        stats[f"{prefix} HR"] = int(stat_data.get("homeRuns", 0))
+        stats[f"{prefix} Games"] = int(stat_data.get("gamesPlayed", 0))
+        stats[f"{prefix} Hits"] = int(stat_data.get("hits", 0))
+        stats[f"{prefix} Runs"] = int(stat_data.get("runs", 0))
+        stats[f"{prefix} RBI"] = int(stat_data.get("rbi", 0))
+        stats[f"{prefix} TB"] = int(stat_data.get("totalBases", 0))
 
-        # Calculate singles if possible
-        hits = scope_stats.get("hits")
-        doubles = scope_stats.get("doubles")
-        triples = scope_stats.get("triples")
-        home_runs = scope_stats.get("homeRuns")
-        if all(isinstance(v, (int, float)) for v in [hits, doubles, triples, home_runs]):
-            singles = hits - doubles - triples - home_runs
-            if is_1_away_from_13(singles):
-                milestone_stats.setdefault(scope, {})["singles"] = singles
+    return {
+        "Name": name,
+        "Team": team_name,
+        "Jersey Number": jersey,
+        "Birth Date": birthdate,
+        **stats
+    }
 
-    return milestone_stats
+def get_players_near_13_all_teams():
+    all_results = []
+    for team_id, team_name in get_all_team_ids():
+        try:
+            player_ids = get_team_roster(team_id)
+        except:
+            continue
 
-def process_players_for_tomorrow():
-    games = get_tomorrows_games()
-    batters = []
-    pitchers = []
-    player_ids_seen = set()
-
-    for game in games:
-        for team_type in ["home", "away"]:
-            team = game.get(f"{team_type}Team", {})
-            team_id = team.get("id")
-            if not team_id:
-                continue
+        for pid in player_ids:
             try:
-                roster = get_team_roster(team_id)
-                st.write(f"{team.get('name', 'Unknown')} roster: {len(roster)} players")
-            except Exception as e:
-                st.warning(f"Roster fetch failed for team {team.get('name', 'unknown')}: {e}")
+                player = get_player_info_and_stats(pid, team_name)
+            except:
                 continue
 
-            for player in roster:
-                player_id = player.get("person", {}).get("id")
-                full_name = player.get("person", {}).get("fullName")
-                position_code = player.get("position", {}).get("code")
-                if player_id in player_ids_seen:
-                    continue
-                player_ids_seen.add(player_id)
+            trigger_notes = []
+            for stat_key in [
+                "Season HR", "Career HR",
+                "Season Games", "Career Games",
+                "Season Hits", "Career Hits",
+                "Season Runs", "Career Runs",
+                "Season RBI", "Career RBI",
+                "Season TB", "Career TB"
+            ]:
+                value = player.get(stat_key)
+                if value is not None and value % 13 == 12:
+                    next_milestone = value + 1
+                    trigger_notes.append(f"{stat_key} = {value} (1 away from {next_milestone})")
 
-                try:
-                    stats = get_player_stats(player_id)
-                    stat_blocks = extract_stats(stats)
-                    milestone_stats = check_milestone(stat_blocks)
+            if trigger_notes:
+                player["Milestone Trigger"] = "; ".join(trigger_notes)
+                all_results.append(player)
 
-                    if milestone_stats:
-                        st.write(f"✅ {full_name} matched milestones: {milestone_stats}")
-                        entry = {
-                            "id": player_id,
-                            "name": full_name,
-                            "position": position_code,
-                            "milestone_stats": milestone_stats
-                        }
-                        if position_code == "1":
-                            pitchers.append(entry)
-                        else:
-                            batters.append(entry)
-                    else:
-                        st.write(f"❌ {full_name} has no milestone stats")
-                except Exception as e:
-                    st.warning(f"Error fetching stats for {full_name}: {e}")
-                    continue
-                sleep(0.1)
+            time.sleep(0.3)
 
-    return batters, pitchers
+    return all_results
 
-def flatten_results(data, role):
-    flat_data = []
-    for entry in data:
-        for scope, stats in entry["milestone_stats"].items():
-            for stat, val in stats.items():
-                flat_data.append({
-                    "Name": entry["name"],
-                    "Role": "Pitcher" if role == "pitchers" else "Batter",
-                    "Scope": scope,
-                    "Stat": stat,
-                    "Value": val,
-                    "One Away From": int(val) + 1
-                })
-    return flat_data
+def export_to_excel(data, filename):
+    df = pd.DataFrame(data)
+    df.to_excel(filename, index=False)
 
-if st.button("Run Tracker for Tomorrow's Games"):
-    with st.spinner("Fetching MLB Data (this may take a minute)..."):
-        batters, pitchers = process_players_for_tomorrow()
-        batters_df = pd.DataFrame(flatten_results(batters, "batters"))
-        pitchers_df = pd.DataFrame(flatten_results(pitchers, "pitchers"))
+    wb = load_workbook(filename)
+    ws = wb.active
 
-    st.success("Done!")
-    st.subheader("Batters Playing Tomorrow One Away From 13x Milestones")
-    st.dataframe(batters_df)
-    st.download_button("Download Batters (CSV)", batters_df.to_csv(index=False), "batters.csv")
+    # Bold headers
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
 
-    st.subheader("Pitchers Playing Tomorrow One Away From 13x Milestones")
-    st.dataframe(pitchers_df)
-    st.download_button("Download Pitchers (CSV)", pitchers_df.to_csv(index=False), "pitchers.csv")
+    # Color milestone column yellow
+    yellow_fill = PatternFill(start_color="FFF9C4", end_color="FFF9C4", fill_type="solid")
+    for row in ws.iter_rows(min_row=2, min_col=1, max_col=ws.max_column):
+        for cell in row:
+            if cell.column_letter == 'P':  # Assuming 'Milestone Trigger' is column P (adjust if needed)
+                if cell.value:
+                    cell.fill = yellow_fill
+
+    # Autofit column widths
+    for col in ws.columns:
+        max_length = 0
+        col_letter = col[0].column_letter
+        for cell in col:
+            try:
+                if cell.value:
+                    max_length = max(max_length, len(str(cell.value)))
+            except:
+                pass
+        ws.column_dimensions[col_letter].width = max_length + 2
+
+    wb.save(filename)
+
+# Run script
+players = get_players_near_13_all_teams()
+if players:
+    export_to_excel(players, "milestone_watch_13.xlsx")
+    print("✅ Exported to milestone_watch_13.xlsx with highlights.")
+else:
+    print("⚠️ No players found near any 13 milestone.")
