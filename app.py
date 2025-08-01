@@ -49,14 +49,27 @@ def check_milestone(stats):
     milestone_stats = {}
     for scope in ["season", "career"]:
         scope_stats = stats.get(scope, {})
-        for stat_key in [
-            "gamesPlayed", "atBats", "hits", "homeRuns", "doubles", "triples", "runs", "rbi",
-            "stolenBases", "walks", "strikeOuts", "totalBases",
-            "wins", "losses", "strikeOuts", "inningsPitched", "gamesPitched", "earnedRuns", "hitsAllowed", "homeRunsAllowed", "runsAllowed"
-        ]:
-            val = scope_stats.get(stat_key)
+
+        if scope == "season":
+            keys = ["gamesPlayed", "hits", "doubles", "triples", "homeRuns", "stolenBases", "totalBases"]
+        elif scope == "career":
+            keys = ["gamesPlayed", "hits", "doubles", "triples", "homeRuns", "stolenBases", "totalBases"]
+
+        for key in keys:
+            val = scope_stats.get(key)
             if is_1_away_from_13(val):
-                milestone_stats.setdefault(scope, {})[stat_key] = val
+                milestone_stats.setdefault(scope, {})[key] = val
+
+        # Calculate singles if possible
+        hits = scope_stats.get("hits")
+        doubles = scope_stats.get("doubles")
+        triples = scope_stats.get("triples")
+        home_runs = scope_stats.get("homeRuns")
+        if all(isinstance(v, (int, float)) for v in [hits, doubles, triples, home_runs]):
+            singles = hits - doubles - triples - home_runs
+            if is_1_away_from_13(singles):
+                milestone_stats.setdefault(scope, {})["singles"] = singles
+
     return milestone_stats
 
 def process_players_for_tomorrow():
