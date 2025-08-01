@@ -13,17 +13,21 @@ def is_1_away_from_13(val):
         return False
 
 @st.cache_data(ttl=3600)
-def get_active_players():
+    def get_active_players():
     url = "https://statsapi.mlb.com/api/v1/people?active=true&sportId=1"
     response = requests.get(url)
-    response.raise_for_status()
+    if response.status_code != 200:
+        st.error(f"Failed to fetch players. Status code: {response.status_code}")
+        st.write(response.text)
+        st.stop()
     return response.json().get("people", [])
+
 
 @st.cache_data(ttl=3600)
 def get_player_stats(player_id):
     url = f"https://statsapi.mlb.com/api/v1/people/{player_id}/stats?stats=career&stats=season&group=all"
     response = requests.get(url)
-    response.raise_for_status()
+    if response.status_code != 200:     st.error(f"Failed to fetch players. Status code: {response.status_code}")     st.stop()
     return response.json().get("stats", [])
 
 def extract_stats(stats):
