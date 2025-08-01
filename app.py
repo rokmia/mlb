@@ -49,7 +49,11 @@ def check_milestone(stats):
     milestone_stats = {}
     for scope in ["season", "career"]:
         scope_stats = stats.get(scope, {})
-        for stat_key in ["homeRuns", "hits", "gamesPlayed"]:
+        for stat_key in [
+            "gamesPlayed", "atBats", "hits", "homeRuns", "doubles", "triples", "runs", "rbi",
+            "stolenBases", "walks", "strikeOuts", "totalBases",
+            "wins", "losses", "strikeOuts", "inningsPitched", "gamesPitched", "earnedRuns", "hitsAllowed", "homeRunsAllowed", "runsAllowed"
+        ]:
             val = scope_stats.get(stat_key)
             if is_1_away_from_13(val):
                 milestone_stats.setdefault(scope, {})[stat_key] = val
