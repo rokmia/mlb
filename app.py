@@ -19,6 +19,7 @@ def get_tomorrows_games():
     response.raise_for_status()
     data = response.json()
     games = data.get("dates", [])[0].get("games", []) if data.get("dates") else []
+    st.info(f"Found {len(games)} scheduled games for tomorrow.")
     return games
 
 def get_team_roster(team_id):
@@ -48,7 +49,8 @@ def check_milestone(stats):
     milestone_stats = {}
     for scope in ["season", "career"]:
         scope_stats = stats.get(scope, {})
-        for stat_key, val in scope_stats.items():
+        for stat_key in ["homeRuns", "hits", "gamesPlayed"]:
+            val = scope_stats.get(stat_key)
             if is_1_away_from_13(val):
                 milestone_stats.setdefault(scope, {})[stat_key] = val
     return milestone_stats
@@ -67,6 +69,7 @@ def process_players_for_tomorrow():
                 continue
             try:
                 roster = get_team_roster(team_id)
+                st.write(f"{team.get('name', 'Unknown')} roster: {len(roster)} players")
             except Exception as e:
                 st.warning(f"Roster fetch failed for team {team.get('name', 'unknown')}: {e}")
                 continue
@@ -85,6 +88,7 @@ def process_players_for_tomorrow():
                     milestone_stats = check_milestone(stat_blocks)
 
                     if milestone_stats:
+                        st.write(f"✅ {full_name} matched milestones: {milestone_stats}")
                         entry = {
                             "id": player_id,
                             "name": full_name,
@@ -95,7 +99,10 @@ def process_players_for_tomorrow():
                             pitchers.append(entry)
                         else:
                             batters.append(entry)
-                except:
+                    else:
+                        st.write(f"❌ {full_name} has no milestone stats")
+                except Exception as e:
+                    st.warning(f"Error fetching stats for {full_name}: {e}")
                     continue
                 sleep(0.1)
 
