@@ -63,7 +63,13 @@ def process_players_for_tomorrow():
         for team_type in ["home", "away"]:
             team = game.get(f"{team_type}Team", {})
             team_id = team.get("id")
-            roster = get_team_roster(team_id)
+            if not team_id:
+                continue
+            try:
+                roster = get_team_roster(team_id)
+            except Exception as e:
+                st.warning(f"Roster fetch failed for team {team.get('name', 'unknown')}: {e}")
+                continue
 
             for player in roster:
                 player_id = player.get("person", {}).get("id")
@@ -123,4 +129,4 @@ if st.button("Run Tracker for Tomorrow's Games"):
 
     st.subheader("Pitchers Playing Tomorrow One Away From 13x Milestones")
     st.dataframe(pitchers_df)
-    st.download_button("Download Pitchers (CSV)", pitchers_df.to_csv(index=False), "pitchers.csv")
+    st.download_button("Download Pitchers (CSV)", pitchers_df.to_csv(index=False), "pitch
