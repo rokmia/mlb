@@ -129,4 +129,4 @@ if st.button("Run Tracker for Tomorrow's Games"):
 
     st.subheader("Pitchers Playing Tomorrow One Away From 13x Milestones")
     st.dataframe(pitchers_df)
-    st.download_button("Download Pitchers (CSV)", pitchers_df.to_csv(index=False), "pitch
+    st.download_button("Download Pitchers (CSV)", pitchers_df.to_csv(index=False), "pitchers.csv")
