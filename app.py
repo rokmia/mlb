@@ -1,4 +1,6 @@
 import requests
+import streamlit as st
+import pandas as pd
 
 # Define the milestone
 MILESTONE = 13
@@ -44,9 +46,6 @@ def process_teams_and_players():
                 career_runs = stats["runs"]
                 career_total_bases = stats["totalBases"]
 
-                season_stats = get_player_stats(player_id)  # Replace with season-specific stats if necessary
-                season_games = season_hits = season_home_runs = season_runs = season_total_bases = 0  # Assume 0 if unavailable
-
                 # Checking career stats
                 if is_multiple_of_13_away(career_games):
                     players_away_from_milestones.append({
@@ -89,18 +88,23 @@ def process_teams_and_players():
                         'target': career_total_bases + (MILESTONE - (career_total_bases % MILESTONE))
                     })
 
-                # Add season checks here if necessary
-
     return players_away_from_milestones
 
-# Main function to get results
+# Main function to get results and display in Streamlit
 def main():
     players = process_teams_and_players()
+
+    # Convert the results to a DataFrame for better display in Streamlit
+    df = pd.DataFrame(players)
+
+    # Streamlit display
+    st.title("MLB Players Near Milestone (Multiple of 13)")
+    st.write("This table displays active MLB players who are one away from achieving a milestone that is a multiple of 13.")
     
-    for player in players:
-        print(f"Player ID: {player['player_id']}, Team: {player['team']}, "
-              f"Stat: {player['stat']}, Current Value: {player['current_value']}, "
-              f"Target: {player['target']}")
+    if not df.empty:
+        st.dataframe(df)  # Display the DataFrame in Streamlit
+    else:
+        st.write("No players are near a milestone at this moment.")
 
 if __name__ == "__main__":
     main()
