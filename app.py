@@ -27,7 +27,9 @@ def get_active_players():
 def get_player_stats(player_id):
     url = f"https://statsapi.mlb.com/api/v1/people/{player_id}/stats?stats=career&stats=season&group=all"
     response = requests.get(url)
-    if response.status_code != 200:     st.error(f"Failed to fetch players. Status code: {response.status_code}")     st.stop()
+    if response.status_code != 200:     
+        st.error(f"Failed to fetch players. Status code: {response.status_code}")     
+        st.stop()
     return response.json().get("stats", [])
 
 def extract_stats(stats):
